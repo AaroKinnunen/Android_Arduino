@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <ArduinoBLE.h>
 #include <Arduino_HTS221.h>
-
+#include "mbed.h"
 // Function predefinitions
 void changeSpeed(int newSpeed);
 void changeMode(int newMode);
@@ -15,7 +15,10 @@ enum Mode {
 
 #define FET_GATE D3 // Pin D3 controls FET gate with PWM (F.e. Fan's current flow 50 % of time => half speed)
 #define TEMP_SENSOR A1  // Temperature sensor on analog pin A1
+#define PWM_PIN P1_12 // D3
+#define PWM_FREQUENCY 25000
 
+mbed::PwmOut pwmPin(PWM_PIN);
 Mode mode = USER_MODE;  // Default mode
 int speed = 0;   // Speed stages 0 - 4
 
@@ -23,7 +26,8 @@ int temperature = 0;
 int humidity = 0;
 
 int analogSteps[] = { 200, 400, 600, 800, 1024 }; // Five speed stages for values of analogRead (0-1024)
-int pwmSteps[] = { 0, 63, 126, 190, 255 };  // Five speed stages for PWM output values (0-255)
+//int pwmSteps[] = { 0, 63, 126, 190, 255 };  // Five speed stages for PWM output values (0-255)
+float pwmSteps[] = { 0, 0.25, 0.5, 0.75, 1.00 };  // Five speed stages for PWM output values (0-255)
 
 BLEService speedService("180A"); // BLE Service
 BLEByteCharacteristic speedCharacteristic("2A67", BLERead | BLEWrite | BLENotify);  // GATT name "Location and Speed"
@@ -35,8 +39,7 @@ BLEByteCharacteristic ledcharasteristic("2A57", BLERead | BLEWrite);//led
 void setup() {
   Serial.begin(9600);
   pinMode(TEMP_SENSOR, INPUT);
-  pinMode(FET_GATE, OUTPUT);
-
+  //pinMode(FET_GATE, OUTPUT);
   if (!HTS.begin()) {
     Serial.println("Failed to initialize humidity temperature sensor!");
   }
@@ -67,6 +70,9 @@ void setup() {
 
   // start advertising
   BLE.advertise();
+
+  pwmPin.period( 1.0 / PWM_FREQUENCY ); // 25 kHz
+  //pwmPin.write( 0.5 );
 }
 
 void loop() {
@@ -117,7 +123,8 @@ void loop() {
       int compareSpeedStage = sensorReadingToSpeedStage(sensorValue);
       if (compareSpeedStage != speed) {
         speed = compareSpeedStage;
-        analogWrite(FET_GATE, pwmSteps[speed]);
+        //analogWrite(FET_GATE, pwmSteps[speed]);
+        pwmPin.write(pwmSteps[speed]);
         speedCharacteristic.writeValue(speed);
       }
       //analogWrite(FET_GATE, pwmSteps[sensorReadingToSpeedStage(sensorValue)]);
@@ -125,7 +132,8 @@ void loop() {
     }
 
     case USER_MODE: {
-      analogWrite(FET_GATE, pwmSteps[speed]);
+      //analogWrite(FET_GATE, pwmSteps[speed]);
+      pwmPin.write(pwmSteps[speed]);
       break;
     }
   }
@@ -150,6 +158,5 @@ int sensorReadingToSpeedStage(int sensorReading) {
   while (sensorReading > analogSteps[speedStage]) {
     speedStage++;
   }
-
   return speedStage;
 }
